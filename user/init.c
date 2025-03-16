@@ -30,8 +30,10 @@ main(void)
       printf("init: fork failed\n");
       exit(1);
     }
-    if(pid == 0){
-      exec("sh", argv);
+    if(pid == 0){ // 자식 프로세스인 경우
+      exec("sh", argv); // "sh" 실행파일 실행
+
+      // 아래 코드는 "sh" 실행 파일 실행에 실패한 경우에 실행됨
       printf("init: exec sh failed\n");
       exit(1);
     }
