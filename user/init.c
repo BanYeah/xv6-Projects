@@ -25,6 +25,12 @@ main(void)
 
   for(;;){
     printf("init: starting sh\n");
+
+    /* xv6 부팅 메세지 */
+    printf("Student ID: 2023311459\n");
+    printf("Name: YunJung Kim\n");
+    printf("========== Welcome to xv6 ==========\n");
+
     pid = fork();
     if(pid < 0){
       printf("init: fork failed\n");
