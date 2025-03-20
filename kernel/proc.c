@@ -54,6 +54,7 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
+      p->nice = 20; // default nice value is 20
       p->kstack = KSTACK((int) (p - proc));
   }
 }
@@ -710,7 +711,70 @@ setnice(int pid, int value)
 void
 ps(int pid)
 {
+  struct proc *p;
+  if (pid == 0) // print out all process's information
+  {
+    // print column names
+    printf("%-16s  %-6s  %-8s  %s\n", "name", "pid", "state", "priority");
 
+    // print process's information
+    for(p = proc; p < &proc[NPROC]; p++)
+    {
+      if (pid != 0)
+      {
+        printf("%-16s  %-6d  ", p->name, p->pid);
+        switch (p->state) {
+          case 2:
+            printf("%-8s  ", "SLEEPING");
+            break;
+          case 3:
+            printf("%-8s  ", "RUNNABLE");
+            break;
+          case 4:
+            printf("%-8s  ", "RUNNING");
+            break;
+          case 5:
+            printf("%-8s  ", "ZOMBIE");
+            break;
+        }
+        printf("%d\n", p->nice);
+      }
+    }
+  } 
+  else // print out corresponding process's information
+  {
+    // check existence
+    for(p = proc; p < &proc[NPROC]; p++)
+    {
+      if (p->pid == pid)
+        break;
+    }
+    if (p >= &proc[NPROC]) // no process
+      return;
+
+    // print column names
+    printf("%-16s  %-6s  %-8s  %s\n", "name", "pid", "state", "priority");
+
+    // print process's information
+    printf("%-16s  %-6d  ", p->name, p->pid);
+    switch (p->state) {
+      case 2:
+        printf("%-8s  ", "SLEEPING");
+        break;
+      case 3:
+        printf("%-8s  ", "RUNNABLE");
+        break;
+      case 4:
+        printf("%-8s  ", "RUNNING");
+        break;
+      case 5:
+        printf("%-8s  ", "ZOMBIE");
+        break;
+    }
+    printf("%d\n", p->nice);
+  }
+
+  return;
 }
 
 uint64
