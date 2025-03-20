@@ -699,25 +699,45 @@ procdump(void)
 int
 getnice(int pid)
 {
+  // check existence
+  struct proc *p;
+  for(p = proc; p < &proc[NPROC]; p++)
+    if (p->pid == pid) break;
 
+  if (p >= &proc[NPROC]) return -1; // no corresponding process
+  else return p->nice;
 }
 
 int 
 setnice(int pid, int value)
 {
+  // check valid value
+  if (value < 0 || value > 39)
+    return -1;
 
+  // check existence
+  struct proc *p;
+  for(p = proc; p < &proc[NPROC]; p++)
+    if (p->pid == pid) break;
+
+  if (p >= &proc[NPROC]) return -1; // no corresponding process
+  else
+  {
+    p->pid = value;
+    return 0;
+  }
 }
 
 void
 ps(int pid)
 {
-  struct proc *p;
   if (pid == 0) // print out all process's information
   {
     // print column names
     printf("%-16s  %-6s  %-8s  %s\n", "name", "pid", "state", "priority");
 
     // print process's information
+    struct proc *p;
     for(p = proc; p < &proc[NPROC]; p++)
     {
       if (pid != 0)
@@ -744,13 +764,11 @@ ps(int pid)
   else // print out corresponding process's information
   {
     // check existence
+    struct proc *p;
     for(p = proc; p < &proc[NPROC]; p++)
-    {
-      if (p->pid == pid)
-        break;
-    }
-    if (p >= &proc[NPROC]) // no process
-      return;
+      if (p->pid == pid) break;
+
+    if (p >= &proc[NPROC]) return; // no corresponding process
 
     // print column names
     printf("%-16s  %-6s  %-8s  %s\n", "name", "pid", "state", "priority");
