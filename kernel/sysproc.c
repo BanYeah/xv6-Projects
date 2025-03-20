@@ -91,3 +91,34 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// Define system call
+int
+sys_getnice(int pid)
+{
+  return getnice(pid);
+}
+
+int 
+sys_setnice(int pid, int value)
+{
+  return setnice(pid, value);
+}
+
+void
+sys_ps(int pid)
+{
+  return ps(pid);
+}
+
+uint64
+sys_meminfo(void)
+{
+  return meminfo();
+}
+
+int
+sys_waitpid(int pid)
+{
+  return waitpid(pid);
+}

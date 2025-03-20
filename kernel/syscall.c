@@ -101,6 +101,11 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
+extern int sys_getnice(int pid); // Define system call
+extern int sys_setnice(int pid, int value);
+extern void sys_ps(int pid);
+extern uint64 sys_meminfo(void);
+extern int sys_waitpid(int pid);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -126,6 +131,11 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_getnice] sys_getnice, // Define system call
+[SYS_setnice] sys_setnice,
+[SYS_ps] sys_ps,
+[SYS_meminfo] sys_meminfo,
+[SYS_waitpid] sys_waitpid,
 };
 
 void

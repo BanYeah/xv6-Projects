@@ -693,3 +693,34 @@ procdump(void)
     printf("\n");
   }
 }
+
+// Define system call
+int
+getnice(int pid)
+{
+
+}
+
+int 
+setnice(int pid, int value)
+{
+
+}
+
+void
+ps(int pid)
+{
+
+}
+
+uint64
+meminfo(void)
+{
+
+}
+
+int
+waitpid(int pid)
+{
+
+}
