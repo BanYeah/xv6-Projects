@@ -790,12 +790,6 @@ ps(int pid)
   return;
 }
 
-uint64
-meminfo(void)
-{
-
-}
-
 int
 waitpid(int pid)
 {

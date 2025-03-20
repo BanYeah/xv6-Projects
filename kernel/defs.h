@@ -63,6 +63,7 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+uint64          meminfo(void);
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -109,7 +110,6 @@ void            procdump(void);
 int             getnice(int pid); // Define system call
 int             setnice(int pid, int value);
 void            ps(int pid);
-uint64          meminfo(void);
 int             waitpid(int pid);
 
 // swtch.S
