@@ -732,25 +732,31 @@ ps(int pid)
 {
   if (pid == 0) { // print out all process's information
     // print column names
-    printf("%-16s  %-6s  %-8s  %s\n", "name", "pid", "state", "priority");
+    printf("%s  %s  %s  %s\n", "name", "pid", "state", "priority");
 
     // print process's information
     struct proc *p;
     for(p = proc; p < &proc[NPROC]; p++) {
-      if (pid != 0) {
-        printf("%-16s  %-6d  ", p->name, p->pid);
+      if (p->pid != 0) {
+        printf("%s  %d  ", p->name, p->pid);
         switch (p->state) {
+          case 0:
+            printf("%s  ", "UNUSED");
+            break;
+          case 1:
+            printf("%s  ", "USED");
+            break;
           case 2:
-            printf("%-8s  ", "SLEEPING");
+            printf("%s  ", "SLEEPING");
             break;
           case 3:
-            printf("%-8s  ", "RUNNABLE");
+            printf("%s  ", "RUNNABLE");
             break;
           case 4:
-            printf("%-8s  ", "RUNNING");
+            printf("%s  ", "RUNNING");
             break;
           case 5:
-            printf("%-8s  ", "ZOMBIE");
+            printf("%s  ", "ZOMBIE");
             break;
         }
         printf("%d\n", p->nice);
@@ -766,22 +772,28 @@ ps(int pid)
     if (p >= &proc[NPROC]) return; // no corresponding process
 
     // print column names
-    printf("%-16s  %-6s  %-8s  %s\n", "name", "pid", "state", "priority");
+    printf("%s  %s  %s  %s\n", "name", "pid", "state", "priority");
 
     // print process's information
-    printf("%-16s  %-6d  ", p->name, p->pid);
+    printf("%s  %d  ", p->name, p->pid);
     switch (p->state) {
+      case 0:
+        printf("%s  ", "UNUSED");
+        break;
+      case 1:
+        printf("%s  ", "USED");
+        break;
       case 2:
-        printf("%-8s  ", "SLEEPING");
+        printf("%s  ", "SLEEPING");
         break;
       case 3:
-        printf("%-8s  ", "RUNNABLE");
+        printf("%s  ", "RUNNABLE");
         break;
       case 4:
-        printf("%-8s  ", "RUNNING");
+        printf("%s  ", "RUNNING");
         break;
       case 5:
-        printf("%-8s  ", "ZOMBIE");
+        printf("%s  ", "ZOMBIE");
         break;
     }
     printf("%d\n", p->nice);
@@ -794,7 +806,6 @@ int
 waitpid(int pid)
 {
   struct proc *pp;
-  int havekids, pid;
   struct proc *p = myproc();
 
   acquire(&wait_lock);
@@ -813,12 +824,6 @@ waitpid(int pid)
     acquire(&pp->lock);
 
     if(pp->state == ZOMBIE){
-      if(addr != 0 && copyout(p->pagetable, addr, (char *)&pp->xstate,
-                              sizeof(pp->xstate)) < 0) {
-        release(&pp->lock);
-        release(&wait_lock);
-        return -1;
-      }
       freeproc(pp);
       release(&pp->lock);
       release(&wait_lock);

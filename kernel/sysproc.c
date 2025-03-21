@@ -93,22 +93,30 @@ sys_uptime(void)
 }
 
 // Define system call
-int
-sys_getnice(int pid)
+uint64
+sys_getnice(void)
 {
+  int pid;
+  argint(0, &pid);
   return getnice(pid);
 }
 
-int 
-sys_setnice(int pid, int value)
+uint64
+sys_setnice(void)
 {
+  int pid, value;
+  argint(0, &pid);
+  argint(1, &value);
   return setnice(pid, value);
 }
 
-void
-sys_ps(int pid)
+uint64
+sys_ps(void)
 {
-  return ps(pid);
+  int pid;
+  argint(0, &pid);
+  ps(pid);
+  return 0;
 }
 
 uint64
@@ -117,8 +125,10 @@ sys_meminfo(void)
   return meminfo();
 }
 
-int
-sys_waitpid(int pid)
+uint64
+sys_waitpid(void)
 {
+  int pid;
+  argint(0, &pid);
   return waitpid(pid);
 }
