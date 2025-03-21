@@ -708,7 +708,7 @@ getnice(int pid)
   else return p->nice;
 }
 
-int 
+int
 setnice(int pid, int value)
 {
   // check valid value
@@ -806,7 +806,7 @@ int
 waitpid(int pid)
 {
   struct proc *pp;
-  struct proc *p = myproc();
+  struct proc *p = myproc(); // parent
 
   acquire(&wait_lock);
 
@@ -819,7 +819,7 @@ waitpid(int pid)
     return -1;
   }
 
-  for(;;){
+  for(;;) {
     // make sure the child isn't still in exit() or swtch().
     acquire(&pp->lock);
 
@@ -831,7 +831,7 @@ waitpid(int pid)
     }
     release(&pp->lock);
 
-    if(pp->parent != p || killed(p)){
+    if(killed(p)){
       release(&wait_lock);
       return -1;
     }

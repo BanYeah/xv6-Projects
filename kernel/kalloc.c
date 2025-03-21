@@ -95,6 +95,5 @@ meminfo(void)
   }
   release(&kmem.lock);
 
-  printf("available memory: %lu bytes\n", freemem * 4096);
   return freemem * 4096;
 }
