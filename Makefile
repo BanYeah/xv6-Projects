@@ -139,6 +139,7 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
+	$U/_getnice\
 	$U/_ps\
 	$U/_meminfo\
 
