@@ -140,6 +140,7 @@ UPROGS=\
 	$U/_wc\
 	$U/_zombie\
 	$U/_getnice\
+	$U/_setnice\
 	$U/_ps\
 	$U/_meminfo\
 

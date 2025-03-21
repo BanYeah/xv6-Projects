@@ -3,8 +3,10 @@
 #include "user/user.h"
 
 int main(int argc, char *argv[]) {
-    if (argc != 2)
+    if (argc != 2) {
         printf("getnice [PID]\n");
+        return 0;
+    }
 
     int nice = getnice(atoi(argv[1]));
     if (nice < 0)

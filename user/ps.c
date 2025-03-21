@@ -3,8 +3,10 @@
 #include "user/user.h"
 
 int main(int argc, char *argv[]) {
-    if (argc != 2)
+    if (argc != 2) {
         printf("ps [PID]\n");
+        return 0;
+    }
 
     ps(atoi(argv[1]));
 }

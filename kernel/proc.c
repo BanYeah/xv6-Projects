@@ -722,7 +722,7 @@ setnice(int pid, int value)
 
   if (p >= &proc[NPROC]) return -1; // no corresponding process
   else {
-    p->pid = value;
+    p->nice = value;
     return 0;
   }
 }
