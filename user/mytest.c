@@ -26,6 +26,20 @@ int main() {
   printf("%d\n\n", setnice(1, 40)); // error
 
 
+  printf("========== Testing ps() ==========\n");
+  printf("$ ps 0\n");
+  ps(0);
+  printf("\n");
+
+  printf("$ ps 1\n");
+  ps(1);
+  printf("\n");
+
+  printf("$ ps 12\n");
+  ps(12);
+  printf("\n");
+
+
   printf("========== Testing meminfo() ==========\n");
   printf("$ meminfo\n");
   printf("%lu\n\n", meminfo());
