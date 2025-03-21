@@ -139,11 +139,7 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
-	$U/_getnice\
-	$U/_setnice\
-	$U/_ps\
-	$U/_meminfo\
-	$U/_waitpid\
+	$U/_mytest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
