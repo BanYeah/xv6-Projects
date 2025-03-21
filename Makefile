@@ -143,6 +143,7 @@ UPROGS=\
 	$U/_setnice\
 	$U/_ps\
 	$U/_meminfo\
+	$U/_waitpid\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
