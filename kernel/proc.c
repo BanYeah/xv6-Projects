@@ -741,22 +741,22 @@ ps(int pid)
         printf("%s  %d  ", p->name, p->pid);
         switch (p->state) {
           case 0:
-            printf("%s  ", "UNUSED");
+            printf("UNUSED  ");
             break;
           case 1:
-            printf("%s  ", "USED");
+            printf("USED  ");
             break;
           case 2:
-            printf("%s  ", "SLEEPING");
+            printf("SLEEPING  ");
             break;
           case 3:
-            printf("%s  ", "RUNNABLE");
+            printf("RUNNABLE  ");
             break;
           case 4:
-            printf("%s  ", "RUNNING");
+            printf("RUNNING  ");
             break;
           case 5:
-            printf("%s  ", "ZOMBIE");
+            printf("ZOMBIE  ");
             break;
         }
         printf("%d\n", p->nice);
@@ -778,22 +778,22 @@ ps(int pid)
     printf("%s  %d  ", p->name, p->pid);
     switch (p->state) {
       case 0:
-        printf("%s  ", "UNUSED");
+        printf("UNUSED  ");
         break;
       case 1:
-        printf("%s  ", "USED");
+        printf("USED  ");
         break;
       case 2:
-        printf("%s  ", "SLEEPING");
+        printf("SLEEPING  ");
         break;
       case 3:
-        printf("%s  ", "RUNNABLE");
+        printf("RUNNABLE  ");
         break;
       case 4:
-        printf("%s  ", "RUNNING");
+        printf("RUNNING  ");
         break;
       case 5:
-        printf("%s  ", "ZOMBIE");
+        printf("ZOMBIE  ");
         break;
     }
     printf("%d\n", p->nice);
