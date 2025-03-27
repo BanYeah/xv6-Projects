@@ -319,9 +319,12 @@ fork(void)
   np->parent = p;
   release(&wait_lock);
 
+  acquire(&p->lock);
   acquire(&np->lock);
   np->state = RUNNABLE;
+  np->nice = p->nice;
   release(&np->lock);
+  release(&p->lock);
 
   return pid;
 }
@@ -700,12 +703,19 @@ int
 getnice(int pid)
 {
   // check existence
+  int nice;
   struct proc *p;
   for(p = proc; p < &proc[NPROC]; p++)
     if (p->pid == pid) break;
 
   if (p >= &proc[NPROC]) return -1; // no corresponding process
-  else return p->nice;
+  else {
+    acquire(&p->lock);
+    nice = p->nice;
+    release(&p->lock);
+    
+    return nice;
+  };
 }
 
 int
@@ -722,7 +732,9 @@ setnice(int pid, int value)
 
   if (p >= &proc[NPROC]) return -1; // no corresponding process
   else {
+    acquire(&p->lock);
     p->nice = value;
+    release(&p->lock);
     return 0;
   }
 }
@@ -738,6 +750,7 @@ ps(int pid)
     struct proc *p;
     for(p = proc; p < &proc[NPROC]; p++) {
       if (p->pid != 0) {
+        acquire(&p->lock);
         printf("%s  %d  ", p->name, p->pid);
         switch (p->state) {
           case 0:
@@ -760,6 +773,7 @@ ps(int pid)
             break;
         }
         printf("%d\n", p->nice);
+        release(&p->lock);
       }
     }
   } 
@@ -775,6 +789,7 @@ ps(int pid)
     printf("%s  %s  %s  %s\n", "name", "pid", "state", "priority");
 
     // print process's information
+    acquire(&p->lock);
     printf("%s  %d  ", p->name, p->pid);
     switch (p->state) {
       case 0:
@@ -797,6 +812,7 @@ ps(int pid)
         break;
     }
     printf("%d\n", p->nice);
+    release(&p->lock);
   }
 
   return;

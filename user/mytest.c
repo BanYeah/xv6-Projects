@@ -16,8 +16,8 @@ int main() {
 
 
   printf("========== Testing setnice() ==========\n");
-  printf("$ setnice 1 10\n");
-  printf("%d\n\n", setnice(1, 10));
+  printf("$ setnice 3 10\n");
+  printf("%d\n\n", setnice(3, 10));
 
   printf("$ setnice 12 10\n");
   printf("%d\n\n", setnice(12, 10)); // error
@@ -69,6 +69,9 @@ int main() {
   printf("$ ps 0\n");
   ps(0);
   printf("\n");
+
+  printf("$ meminfo\n");
+  printf("%lu\n\n", meminfo());
 
   printf("$ waitpid %d\n", pid2);
   printf("%d\n\n", waitpid(pid2));
