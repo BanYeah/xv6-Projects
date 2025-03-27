@@ -713,9 +713,9 @@ getnice(int pid)
     acquire(&p->lock);
     nice = p->nice;
     release(&p->lock);
-    
+
     return nice;
-  };
+  }
 }
 
 int
