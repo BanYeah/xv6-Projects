@@ -468,6 +468,8 @@ scheduler(void)
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
+        // CPU(운영체제)의 Context에서 Process의 Context로 전환
+        // 다시 CPU(운영체제)의 Context로 전환될 때까지 대기
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
@@ -508,6 +510,7 @@ sched(void)
 
   intena = mycpu()->intena;
   swtch(&p->context, &mycpu()->context);
+  // Process의 Context에서 CPU(운영체제)의 Context로 전환
   mycpu()->intena = intena;
 }
 
@@ -517,8 +520,8 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-  p->state = RUNNABLE;
-  sched();
+  p->state = RUNNABLE; // CPU 양보
+  sched(); // Scheduler 호출
   release(&p->lock);
 }
 
@@ -740,44 +743,51 @@ setnice(int pid, int value)
 }
 
 void
+pps(struct proc *p) // print process status
+{
+  acquire(&p->lock);
+  printf("%s\t%d\t", p->name, p->pid);
+  switch (p->state)
+  {
+  case 0:
+    printf("UNUSED  \t");
+    break;
+  case 1:
+    printf("USED    \t");
+    break;
+  case 2:
+    printf("SLEEPING\t");
+    break;
+  case 3:
+    printf("RUNNABLE\t");
+    break;
+  case 4:
+    printf("RUNNING \t");
+    break;
+  case 5:
+    printf("ZOMBIE  \t");
+    break;
+  }
+  printf("%d\n", p->nice);
+  release(&p->lock);
+}
+
+void 
 ps(int pid)
 {
-  if (pid == 0) { // print out all process's information
-    // print column names
-    printf("%s  %s  %s  %s\n", "name", "pid", "state", "priority");
+  if (pid == 0) { // all process's information
+    acquire(&tickslock);
+    unsigned long long t = (unsigned long long)ticks * 1000;
+    release(&tickslock);
+    printf("name\tpid\tstate   \tpriority\ttick %llu\n", t);
 
-    // print process's information
     struct proc *p;
     for(p = proc; p < &proc[NPROC]; p++) {
-      if (p->pid != 0) {
-        acquire(&p->lock);
-        printf("%s  %d  ", p->name, p->pid);
-        switch (p->state) {
-          case 0:
-            printf("UNUSED  ");
-            break;
-          case 1:
-            printf("USED  ");
-            break;
-          case 2:
-            printf("SLEEPING  ");
-            break;
-          case 3:
-            printf("RUNNABLE  ");
-            break;
-          case 4:
-            printf("RUNNING  ");
-            break;
-          case 5:
-            printf("ZOMBIE  ");
-            break;
-        }
-        printf("%d\n", p->nice);
-        release(&p->lock);
-      }
+      if (p->pid != 0)
+        pps(p); // print process status
     }
   } 
-  else { // print out corresponding process's information
+  else { // corresponding process's information
     // check existence
     struct proc *p;
     for(p = proc; p < &proc[NPROC]; p++)
@@ -785,34 +795,11 @@ ps(int pid)
 
     if (p >= &proc[NPROC]) return; // no corresponding process
 
-    // print column names
-    printf("%s  %s  %s  %s\n", "name", "pid", "state", "priority");
-
-    // print process's information
-    acquire(&p->lock);
-    printf("%s  %d  ", p->name, p->pid);
-    switch (p->state) {
-      case 0:
-        printf("UNUSED  ");
-        break;
-      case 1:
-        printf("USED  ");
-        break;
-      case 2:
-        printf("SLEEPING  ");
-        break;
-      case 3:
-        printf("RUNNABLE  ");
-        break;
-      case 4:
-        printf("RUNNING  ");
-        break;
-      case 5:
-        printf("ZOMBIE  ");
-        break;
-    }
-    printf("%d\n", p->nice);
-    release(&p->lock);
+    acquire(&tickslock);
+    unsigned long long t = (unsigned long long)ticks * 1000;
+    release(&tickslock);
+    printf("name\tpid\tstate   \tpriority\ttick %llu\n", t);
+    pps(p); // print process status
   }
 
   return;
