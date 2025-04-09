@@ -91,7 +91,14 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
+
+  // these are used by the EEVDF scheduler
   int nice;                    // Nice value
+  int tickcount;
+  int runtime;
+  int vruntime;
+  int vdeadline;
+  int eligible;
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
@@ -105,4 +112,15 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+};
+
+static const int weight[40] = {
+  /*  0 */  88761,  71755,  56483,  46273,  36291,
+  /*  5 */  29154,  23254,  18705,  14949,  11916,
+  /* 10 */   9548,   7620,   6100,   4904,   3906,
+  /* 15 */   3121,   2501,   1991,   1586,   1277,
+  /* 20 */   1024,    820,    655,    526,    423,
+  /* 25 */    335,    272,    215,    172,    137,
+  /* 30 */    110,     87,     70,     56,     45,
+  /* 35 */     36,     29,     23,     18,     15,
 };

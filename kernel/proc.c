@@ -54,7 +54,14 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
+
       p->nice = 20; // default nice value is 20
+      p->tickcount = 0;
+      p->runtime = 0;
+      p->vruntime = 0;
+      p->vdeadline = 0;
+      p->eligible = 0;
+
       p->kstack = KSTACK((int) (p - proc));
   }
 }
@@ -737,6 +744,7 @@ setnice(int pid, int value)
   else {
     acquire(&p->lock);
     p->nice = value;
+    p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
     release(&p->lock);
     return 0;
   }
@@ -768,7 +776,9 @@ pps(struct proc *p) // print process status
     printf("ZOMBIE  \t");
     break;
   }
-  printf("%d\n", p->nice);
+  printf("%d", p->nice);
+  printf("\t\t%lld\t\t%lld", (long long)(p->runtime / weight[p->nice]) * 1000, (long long)p->runtime * 1000);
+  printf("\t\t%lld\t\t%lld\n", (long long)p->vruntime * 1000, (long long)p->vdeadline * 1000);
   release(&p->lock);
 }
 
@@ -779,7 +789,8 @@ ps(int pid)
     acquire(&tickslock);
     unsigned long long t = (unsigned long long)ticks * 1000;
     release(&tickslock);
-    printf("name\tpid\tstate   \tpriority\ttick %llu\n", t);
+    printf("name\tpid\tstate   \tpriority");
+    printf("\truntime/weight\truntime  \tvruntime\tvdeadline\ttick %llu\n", t);
 
     struct proc *p;
     for(p = proc; p < &proc[NPROC]; p++) {
@@ -798,7 +809,8 @@ ps(int pid)
     acquire(&tickslock);
     unsigned long long t = (unsigned long long)ticks * 1000;
     release(&tickslock);
-    printf("name\tpid\tstate   \tpriority\ttick %llu\n", t);
+    printf("name\tpid\tstate   \tpriority");
+    printf("\truntime/weight\truntime  \tvruntime\tvdeadline\ttick %llu\n", t);
     pps(p); // print process status
   }
 
