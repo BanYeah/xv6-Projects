@@ -54,14 +54,6 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
-
-      p->nice = 20; // default nice value is 20
-      p->tickcount = 0;
-      p->runtime = 0;
-      p->vruntime = 0;
-      p->vdeadline = 0;
-      p->eligible = 0;
-
       p->kstack = KSTACK((int) (p - proc));
   }
 }
@@ -131,6 +123,7 @@ allocproc(void)
 
 found:
   p->pid = allocpid();
+  p->nice = 20;  // default nice value is 20
   p->state = USED;
 
   // Allocate a trapframe page.
@@ -171,6 +164,12 @@ freeproc(struct proc *p)
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
+  p->nice = 0;
+  p->tickcount = 0;
+  p->runtime = 0;
+  p->vruntime = 0;
+  p->vdeadline = 0;
+  p->eligible = 0;
   p->parent = 0;
   p->name[0] = 0;
   p->chan = 0;
@@ -259,6 +258,8 @@ userinit(void)
 
   p->state = RUNNABLE;
 
+  // vdeadline 계산
+  // eligibility 계산
   release(&p->lock);
 }
 
@@ -330,8 +331,12 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   np->nice = p->nice;
-  release(&np->lock);
+  np->vruntime = p->vruntime;
   release(&p->lock);
+
+  np->vdeadline = np->vruntime + BASETIMESLICE * 1024 / weight[np->nice];
+  // eligibility 계산
+  release(&np->lock);
 
   return pid;
 }
@@ -464,6 +469,19 @@ scheduler(void)
     // turned off; enable them to avoid a deadlock if all
     // processes are waiting.
     intr_on();
+
+    // for(p = proc; p < &proc[NPROC]; p++) {
+    //   acquire(&p->lock);
+    //   if(p->state == RUNNABLE || p->state == RUNNING) {
+
+    //   }
+    //   release(&p->lock);
+    // }
+
+    // for(p = proc; p < &proc[NPROC]; p++) {
+    //   acquire(&p->lock);
+    //   release(&p->lock);
+    // }
 
     int found = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
@@ -599,6 +617,9 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+
+        p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
+        // eligibility 계산
       }
       release(&p->lock);
     }
@@ -777,8 +798,8 @@ pps(struct proc *p) // print process status
     break;
   }
   printf("%d", p->nice);
-  printf("\t\t%lld\t\t%lld", (long long)(p->runtime / weight[p->nice]) * 1000, (long long)p->runtime * 1000);
-  printf("\t\t%lld\t\t%lld\n", (long long)p->vruntime * 1000, (long long)p->vdeadline * 1000);
+  printf("\t\t%d\t\t%d", (p->runtime / weight[p->nice]), p->runtime);
+  printf("\t\t%d\t\t%d\n", p->vruntime, p->vdeadline);
   release(&p->lock);
 }
 
@@ -787,10 +808,10 @@ ps(int pid)
 {
   if (pid == 0) { // all process's information
     acquire(&tickslock);
-    unsigned long long t = (unsigned long long)ticks * 1000;
+    uint t = ticks * 1000;
     release(&tickslock);
     printf("name\tpid\tstate   \tpriority");
-    printf("\truntime/weight\truntime  \tvruntime\tvdeadline\ttick %llu\n", t);
+    printf("\truntime/weight\truntime  \tvruntime\tvdeadline\ttick %u\n", t);
 
     struct proc *p;
     for(p = proc; p < &proc[NPROC]; p++) {
@@ -807,10 +828,10 @@ ps(int pid)
     if (p >= &proc[NPROC]) return; // no corresponding process
 
     acquire(&tickslock);
-    unsigned long long t = (unsigned long long)ticks * 1000;
+    uint t = ticks * 1000;
     release(&tickslock);
     printf("name\tpid\tstate   \tpriority");
-    printf("\truntime/weight\truntime  \tvruntime\tvdeadline\ttick %llu\n", t);
+    printf("\truntime/weight\truntime  \tvruntime\tvdeadline\ttick %u\n", t);
     pps(p); // print process status
   }
 

@@ -94,7 +94,7 @@ struct proc {
 
   // these are used by the EEVDF scheduler
   int nice;                    // Nice value
-  int tickcount;
+  int tickcount;               // Tick count (milliticks)
   int runtime;
   int vruntime;
   int vdeadline;

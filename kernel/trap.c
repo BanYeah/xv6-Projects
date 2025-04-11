@@ -79,12 +79,12 @@ usertrap(void)
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2) {
     acquire(&p->lock);
-    p->runtime++;
-    p->vruntime += 1024 / weight[p->nice];
-    p->tickcount++; // update time slice
+    p->runtime += 1000;
+    p->vruntime += 1000 * 1024 / weight[p->nice];
+    p->tickcount += 1000; // update time slice
 
     int tick_over = 0;
-    if (p->tickcount >= BASETIMESLICE) {
+    if(p->tickcount >= BASETIMESLICE) {
       p->tickcount = 0;
       p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
       tick_over = 1;
@@ -167,16 +167,16 @@ kerneltrap()
 
   // give up the CPU if this is a timer interrupt.
   struct proc *p = myproc();
-  if (which_dev == 2 && p != 0) {
+  if(which_dev == 2 && p != 0) {
     acquire(&p->lock);
-    p->runtime++;
-    p->vruntime += 1024 / weight[p->nice];
-    p->tickcount++;
+    p->runtime += 1000;
+    p->vruntime += 1000 * 1024 / weight[p->nice];
+    p->tickcount += 1000; // update time slice
 
     int tick_over = 0;
-    if (p->tickcount >= 5) {
+    if(p->tickcount >= BASETIMESLICE) {
       p->tickcount = 0;
-      p->vdeadline = p->vruntime + 5 * 1024 / weight[p->nice];
+      p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
       tick_over = 1;
     }
     release(&p->lock);
