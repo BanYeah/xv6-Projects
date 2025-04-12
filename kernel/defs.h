@@ -111,6 +111,7 @@ int             getnice(int pid); // Define system call
 int             setnice(int pid, int value);
 void            ps(int pid);
 int             waitpid(int pid);
+int             eligible(struct proc *p);
 
 // swtch.S
 void            swtch(struct context*, struct context*);

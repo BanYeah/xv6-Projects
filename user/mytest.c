@@ -96,8 +96,8 @@ int main()
 {
   printf("=== TEST START ===\n");
 
-  int pid[2];
-  for (int i = 0; i < 2; i++) {
+  int pid[3];
+  for (int i = 0; i < 3; i++) {
     pid[i] = fork();
     if (pid[i] < 0) {
       printf("fork error\n");
@@ -112,11 +112,14 @@ int main()
     }
   }
 
-  setnice(pid[0], 0);
-  setnice(pid[1], 10);
+  for (int i = 0; i < 3; i++)
+    setnice(pid[i], i * 10);
 
-  sleep(1000);
+  sleep(1500);
   ps(0);
+
+  for (int i = 0; i < 3; i++)
+    kill(pid[i]);
 
   exit(0); // terminate
 }

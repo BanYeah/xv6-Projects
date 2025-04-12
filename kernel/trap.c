@@ -87,6 +87,7 @@ usertrap(void)
     if(p->tickcount >= BASETIMESLICE) {
       p->tickcount = 0;
       p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
+      p->eligible = eligible(p);
       tick_over = 1;
     }
     release(&p->lock);
@@ -177,6 +178,7 @@ kerneltrap()
     if(p->tickcount >= BASETIMESLICE) {
       p->tickcount = 0;
       p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
+      p->eligible = eligible(p);
       tick_over = 1;
     }
     release(&p->lock);
