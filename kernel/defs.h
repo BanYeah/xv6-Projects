@@ -64,6 +64,9 @@ void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
 uint64          meminfo(void);
+uint64          mmap(uint64 addr, int length, int prot, int flags, int fd, int offset);
+int             munmap(uint64 addr);
+int             freemem();
 
 // log.c
 void            initlog(int, struct superblock*);

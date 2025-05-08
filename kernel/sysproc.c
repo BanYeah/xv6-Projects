@@ -92,7 +92,6 @@ sys_uptime(void)
   return xticks;
 }
 
-// Define system call
 uint64
 sys_getnice(void)
 {
@@ -131,4 +130,32 @@ sys_waitpid(void)
   int pid;
   argint(0, &pid);
   return waitpid(pid);
+}
+
+uint64
+sys_mmap(void)
+{
+  uint64 addr;
+  int length, prot, flags, fd, offset;
+  argint(0, &addr);
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(4, &fd);
+  argint(5, &offset);
+  return mmap(addr, length, prot, flags, fd, offset);
+}
+
+uint64
+sys_munmap(void)
+{
+  uint64 addr;
+  argint(0, &addr);
+  return munmap(addr);
+}
+
+uint64
+sys_freemem(void)
+{
+  return freemem();
 }
