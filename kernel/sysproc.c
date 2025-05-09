@@ -137,7 +137,7 @@ sys_mmap(void)
 {
   uint64 addr;
   int length, prot, flags, fd, offset;
-  argint(0, &addr);
+  argaddr(0, &addr);
   argint(1, &length);
   argint(2, &prot);
   argint(3, &flags);
@@ -150,7 +150,7 @@ uint64
 sys_munmap(void)
 {
   uint64 addr;
-  argint(0, &addr);
+  argaddr(0, &addr);
   return munmap(addr);
 }
 
