@@ -66,6 +66,7 @@ void            kfree(void *);
 void            kinit(void);
 uint64          meminfo(void);
 struct mmap_area* find_mmap_area(uint64 addr, int option);
+void            copy_mmap_area(struct proc *p, struct proc *np);
 void            clear_mmap_area(struct proc *p);
 void            mmappage(uint64 addr, int length, int prot, int flags, struct file *f, int offset, struct proc *p);
 uint64          mmap(uint64 addr, int length, int prot, int flags, int fd, int offset);

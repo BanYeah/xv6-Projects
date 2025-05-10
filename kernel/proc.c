@@ -306,6 +306,9 @@ fork(void)
   }
   np->sz = p->sz;
 
+  // Copy mmap area from parent to child.
+  copy_mmap_area(p, np);
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 

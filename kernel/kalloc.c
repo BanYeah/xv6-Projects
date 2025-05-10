@@ -134,6 +134,46 @@ find_mmap_area(uint64 addr, int option)
   else return m;
 }
 
+void
+copy_mmap_area(struct proc *p, struct proc *np)
+{
+  struct mmap_area *m, *nm;
+  for (m = mmap_area; m < mmap_area + NMMAP; m++) {
+    if (m->length != 0 && m->p == p) {
+      nm = find_mmap_area(m->addr, 0);
+
+      nm->addr = m->addr;
+      nm->length = m->length;
+      nm->prot = m->prot;
+      nm->flags = m->flags;
+      nm->f = m->f;
+      nm->offset = m->offset;
+      nm->p = np;
+
+
+      pte_t *pte;
+      uint64 pa, mem;
+      for (int l = 0; l < m->length; l += PGSIZE) {
+        // virtual memory is mapped in the parent process
+        if (walkaddr(p->pagetable, MMAPBASE + m->addr + l) != 0) {
+          pte = walk(p->pagetable, MMAPBASE + m->addr + l, 0);
+          pa = PTE2PA(*pte);
+
+          mem = (uint64)kalloc();
+          memmove((void *)mem, (void *)pa, PGSIZE);
+          mappages(
+            np->pagetable, 
+            MMAPBASE + nm->addr + l, 
+            PGSIZE, 
+            mem, 
+            (nm->prot & PROT_READ ? PTE_R : 0) | (nm->prot & PROT_WRITE ? PTE_W : 0) | PTE_U
+          );
+        }
+      }
+    }
+  }
+}
+
 void 
 clear_mmap_area(struct proc *p)
 {
