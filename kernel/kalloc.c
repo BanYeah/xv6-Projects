@@ -204,7 +204,24 @@ mmap(uint64 addr, int length, int prot, int flags, int fd, int offset)
 int
 munmap(uint64 addr)
 {
+  int length;
+  struct proc *p;
+  struct mmap_area *m = find_mmap_area(addr, 1); // corresponding mmap_area
+  if (m == 0) return -1;
 
+  length = m->length;
+  p = m->p;
+
+  // free physical memory and page table
+  acquire(&p->lock);
+  for (int l = 0; l < length; l += PGSIZE) {
+    if (walkaddr(p->pagetable, MMAPBASE + addr + l) != 0)
+      uvmunmap(p->pagetable, MMAPBASE + addr + l, 1, 1);
+  }
+  release(&p->lock);
+
+  m->length = 0;
+  return 1;
 }
 
 int
