@@ -6,7 +6,12 @@
 #include "param.h"
 #include "memlayout.h"
 #include "spinlock.h"
+#include "sleeplock.h"
 #include "riscv.h"
+#include "fs.h"
+#include "file.h"
+#include "kalloc.h"
+#include "proc.h"
 #include "defs.h"
 
 void freerange(void *pa_start, void *pa_end);
@@ -24,11 +29,18 @@ struct {
   uint freemem;
 } kmem;
 
+struct mmap_area mmap_area[NMMAP];
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
   kmem.freemem = 0;
+
+  struct mmap_area *m;
+  for (m = mmap_area; m < mmap_area + NMMAP; m++)
+    m->length = 0;
+
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -103,10 +115,90 @@ meminfo(void)
   return freemem * 4096;
 }
 
+// if option = 0, find empty mmap_area
+// if option = 1, fine corresponding mmap_area
+struct mmap_area*
+find_mmap_area(uint64 addr, int option)
+{
+  struct proc *p = myproc();
+  struct mmap_area *m;
+  for (m = mmap_area; m < mmap_area + NMMAP; m++) {
+    if (option == 0 && m->length == 0) break;
+    if (option == 1 && m->length != 0 &&
+      m->addr <= addr && addr < m->addr + m->length &&
+      m->p == p)
+      break;
+  }
+
+  if (m == mmap_area + NMMAP) return 0;
+  else return m;
+}
+
+void
+mmappage(uint64 addr, int length, int prot, int flags, struct file *f, int offset, struct proc *p)
+{
+  for (int l = 0; l < length; l += PGSIZE) {
+    uint64 pa = (uint64)kalloc();
+
+    if (flags & MAP_ANONYMOUS)
+      memset((void *)pa, 0, PGSIZE);
+    else {
+      ilock(f->ip);
+      readi(f->ip, 0, pa, offset+l*PGSIZE, PGSIZE);
+      iunlock(f->ip);
+    }
+
+    acquire(&p->lock);
+    mappages(
+      p->pagetable, 
+      MMAPBASE + addr + l, 
+      PGSIZE, 
+      pa, 
+      (prot & PROT_READ ? PTE_R : 0) | (prot & PROT_WRITE ? PTE_W : 0) | PTE_U
+    );
+    release(&p->lock);
+  }
+}
+
 uint64
 mmap(uint64 addr, int length, int prot, int flags, int fd, int offset)
 {
+  if (addr % PGSIZE != 0 || length % PGSIZE != 0 ||
+    ((flags & MAP_ANONYMOUS) && (fd != -1 || offset != 0)) || 
+    (!(flags & MAP_ANONYMOUS) && fd == -1))
+    return 0;
 
+
+  struct proc *p = myproc();
+  struct file *f = 0;
+
+  if (!(flags & MAP_ANONYMOUS)) {
+    acquire(&p->lock);
+    f = p->ofile[fd];
+    release(&p->lock);
+
+    // check that the prot of file and the prot param are same
+    int file_prot = (f->readable ? 0x1 : 0) | (f->writable ? 0x2 : 0);
+    if (prot != file_prot)
+      return 0;
+  }
+
+  // record mmap_area
+  struct mmap_area *m = find_mmap_area(addr, 0); // empty mmap_area
+  if (m == 0) panic("mmap: shortage");
+
+  m->addr = addr;
+  m->length = length;
+  m->prot = prot;
+  m->flags = flags;
+  m->f = f;
+  m->offset = offset;
+  m->p = p;
+
+  if (flags & MAP_POPULATE)
+    mmappage(addr, length, prot, flags, f, offset, p);
+
+  return MMAPBASE + addr;
 }
 
 int

@@ -65,6 +65,8 @@ void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
 uint64          meminfo(void);
+struct mmap_area* find_mmap_area(uint64 addr, int option);
+void            mmappage(uint64 addr, int length, int prot, int flags, struct file *f, int offset, struct proc *p);
 uint64          mmap(uint64 addr, int length, int prot, int flags, int fd, int offset);
 int             munmap(uint64 addr);
 int             freemem();
@@ -82,7 +84,7 @@ int             piperead(struct pipe*, uint64, int);
 int             pipewrite(struct pipe*, uint64, int);
 
 // printf.c
-int            printf(char*, ...) __attribute__ ((format (printf, 1, 2)));
+int             printf(char*, ...) __attribute__ ((format (printf, 1, 2)));
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 
