@@ -21,12 +21,14 @@ struct run {
 struct {
   struct spinlock lock;
   struct run *freelist;
+  uint freemem;
 } kmem;
 
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  kmem.freemem = 0;
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -59,21 +61,24 @@ kfree(void *pa)
   acquire(&kmem.lock);
   r->next = kmem.freelist;
   kmem.freelist = r;
+  kmem.freemem++;
   release(&kmem.lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
-void *
+void*
 kalloc(void)
 {
   struct run *r;
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r) {
     kmem.freelist = r->next;
+    kmem.freemem--;
+  }
   release(&kmem.lock);
 
   if(r)
@@ -111,7 +116,13 @@ munmap(uint64 addr)
 }
 
 int
-freemem()
+freemem(void)
 {
+  uint64 freemem;
 
+  acquire(&kmem.lock);
+  freemem = kmem.freemem;
+  release(&kmem.lock);
+
+  return freemem;
 }
