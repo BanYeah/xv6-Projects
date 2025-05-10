@@ -3,6 +3,7 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
+#include "kalloc.h"
 #include "proc.h"
 #include "defs.h"
 
@@ -37,6 +38,8 @@ void
 usertrap(void)
 {
   int which_dev = 0;
+  uint64 scause = r_scause();
+  uint64 stval = r_stval();
 
   if((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
@@ -50,7 +53,7 @@ usertrap(void)
   // save user program counter.
   p->trapframe->epc = r_sepc();
   
-  if(r_scause() == 8){
+  if(scause == 8){
     // system call
 
     if(killed(p))
@@ -65,11 +68,19 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if(scause == 13 || scause == 15){
+    // pagefault
+
+    struct mmap_area *m = find_mmap_area(stval - MMAPBASE, 1);
+    if (m == 0 || (scause == 15 && !(m->prot & PROT_WRITE)))
+      setkilled(p);
+    else
+      mmappage(m->addr, m->length, m->prot, m->flags, m->f, m->offset, m->p);
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
-    printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
+    printf("usertrap(): unexpected scause 0x%lx pid=%d\n", scause, p->pid);
+    printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), stval);
     setkilled(p);
   }
 
@@ -154,20 +165,30 @@ kerneltrap()
   uint64 sepc = r_sepc();
   uint64 sstatus = r_sstatus();
   uint64 scause = r_scause();
-  
+  uint64 stval = r_stval();
+
+  struct proc *p = myproc();
+
   if((sstatus & SSTATUS_SPP) == 0)
     panic("kerneltrap: not from supervisor mode");
   if(intr_get() != 0)
     panic("kerneltrap: interrupts enabled");
 
-  if((which_dev = devintr()) == 0){
+  if(scause == 13 || scause == 15){
+    // pagefault
+
+    struct mmap_area *m = find_mmap_area(stval - MMAPBASE, 1);
+    if (m == 0 || (scause == 15 && !(m->prot & PROT_WRITE)))
+      setkilled(p);
+    else
+      mmappage(m->addr, m->length, m->prot, m->flags, m->f, m->offset, m->p);
+  } else if((which_dev = devintr()) == 0){
     // interrupt or trap from an unknown source
     printf("scause=0x%lx sepc=0x%lx stval=0x%lx\n", scause, r_sepc(), r_stval());
     panic("kerneltrap");
   }
 
   // give up the CPU if this is a timer interrupt.
-  struct proc *p = myproc();
   if(which_dev == 2 && p != 0) {
     acquire(&p->lock);
     p->runtime += 1000;
