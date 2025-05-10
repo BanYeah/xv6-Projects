@@ -1,126 +1,85 @@
 #include "kernel/types.h"
 #include "kernel/stat.h"
+#include "kernel/param.h"
 #include "user/user.h"
+#define SIZE 20480
 
-# if 0
-int main() {
-  printf("========== Testing getnice() ==========\n");
-  printf("$ ps 0\n");
-  ps(0);
-  printf("\n");
-
-  printf("$ getnice 1\n");
-  printf("%d\n\n", getnice(1));
-
-  printf("$ getnice 12\n");
-  printf("%d\n\n", getnice(12)); // error
-
-
-  printf("========== Testing setnice() ==========\n");
-  printf("$ setnice 3 10\n");
-  printf("%d\n\n", setnice(3, 10));
-
-  printf("$ setnice 12 10\n");
-  printf("%d\n\n", setnice(12, 10)); // error
-
-  printf("$ setnice 1 40\n");
-  printf("%d\n\n", setnice(1, 40)); // error
-
-
-  printf("========== Testing ps() ==========\n");
-  printf("$ ps 0\n");
-  ps(0);
-  printf("\n");
-
-  printf("$ ps 1\n");
-  ps(1);
-  printf("\n");
-
-  printf("$ ps 12\n");
-  ps(12);
-  printf("\n");
-
-
-  printf("========== Testing meminfo() ==========\n");
-  printf("$ meminfo\n");
-  printf("%lu\n\n", meminfo());
-
-
-  printf("========== Testing waitpid() ==========\n");
-  printf("$ ps 0\n");
-  ps(0);
-  printf("\n");
-
-  int pid1 = fork();
-  if (pid1 < 0) {
-    printf("fork error\n");
-    return 0;
-  }
-  else if (pid1 == 0) // child
-    exit(0);
-
-  int pid2 = fork();
-  if (pid2 < 0) {
-    printf("fork error\n");
-    return 0;
-  }
-  else if (pid2 == 0) // child
-    exit(0);
-
-  printf("$ ps 0\n");
-  ps(0);
-  printf("\n");
-
-  printf("$ meminfo\n");
-  printf("%lu\n\n", meminfo());
-
-  printf("$ waitpid %d\n", pid2);
-  printf("%d\n\n", waitpid(pid2));
-
-  printf("$ ps 0\n");
-  ps(0);
-  printf("\n");
-
-  printf("$ waitpid %d\n", pid1);
-  printf("%d\n\n", waitpid(pid1));
-
-  printf("$ ps 0\n");
-  ps(0);
-  printf("\n");
-
-  printf("$ waitpid 1\n");
-  printf("%d\n\n", waitpid(1)); // error
-}
-#elif 1
 int main()
 {
   printf("=== TEST START ===\n");
 
-  int pid[3];
-  for (int i = 0; i < 3; i++) {
-    pid[i] = fork();
-    if (pid[i] < 0) {
-      printf("fork error\n");
-      exit(1);
+  printf("freemem: %d\n", freemem());
+
+  char *file = (char *)mmap(8192, SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+  printf("freemem: %d\n", freemem());
+
+  file[12288] = 'U';
+  file[8192] = 'K';
+  file[4096] = 'K';
+  file[0] = 'S';
+
+  for (int i = 0; i < SIZE; i++) {
+    char buf[2] = {file[i], '\0'};
+    printf("%s", buf);
+  }
+  printf("\n");
+
+  printf("freemem: %d\n\n", freemem());
+
+
+  int pid = fork();
+  if (pid < 0) {
+    printf("fork failed\n");
+    exit(0);
+  }
+  else if (pid == 0) {
+    printf("In child process\n");
+    printf("freemem: %d\n", freemem());
+
+    file[16384] = '!';
+
+    for (int i = 0; i < SIZE; i++) {
+      char buf[2] = {file[i], '\0'};
+      printf("%s", buf);
     }
-    else if (pid[i] == 0) { // child
-      while (1) {
-        volatile int x = 0;
-        for (int j = 0; j < 1000000; j++)
-          x++;
-      }
-    }
+    printf("\n\n");
+
+    munmap((uint64)file - MMAPBASE);
+    exit(0);
   }
 
-  for (int i = 0; i < 3; i++)
-    setnice(pid[i], i * 10);
+  waitpid(pid);
 
-  sleep(1500);
-  ps(0);
+  printf("In parent process\n");
+  printf("freemem: %d\n", freemem());
 
-  for (int i = 0; i < 3; i++)
-    kill(pid[i]);
+  file[16385] = '?';
 
-  exit(0); // terminate
+  for (int i = 0; i < SIZE; i++) {
+    char buf[2] = {file[i], '\0'};
+    printf("%s", buf);
+  }
+  printf("\n");
+
+  // munmap((uint64)file - MMAPBASE); // 프로세스 종료 시 자동으로 munmap해야
+  printf("freemem: %d\n", freemem());
+
+  exit(0);
 }
-#endif
+
+/* 실행 결과
+=== TEST START ===
+freemem: 32532
+freemem: 32532
+SKKU
+freemem: 32525
+
+In child process
+freemem: 32508
+SKKU!
+
+In parent process
+freemem: 32525
+SKKU?
+freemem: 32525
+ */
