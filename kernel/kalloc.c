@@ -134,6 +134,27 @@ find_mmap_area(uint64 addr, int option)
   else return m;
 }
 
+void 
+clear_mmap_area(struct proc *p)
+{
+  int length;
+  uint64 addr;
+  struct mmap_area *m;
+  for (m = mmap_area; m < mmap_area + NMMAP; m++) {
+    if (m->length != 0 && m->p == p) {
+      addr = m->addr;
+      length = m->length;
+
+      // free physical memory and page table
+      for (int l = 0; l < length; l += PGSIZE)
+        if (walkaddr(p->pagetable, MMAPBASE + addr + l) != 0)
+          uvmunmap(p->pagetable, MMAPBASE + addr + l, 1, 1);
+
+      m->length = 0;
+    }
+  }
+}
+
 void
 mmappage(uint64 addr, int length, int prot, int flags, struct file *f, int offset, struct proc *p)
 {
