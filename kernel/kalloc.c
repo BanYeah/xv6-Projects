@@ -26,7 +26,7 @@ struct run {
 struct {
   struct spinlock lock;
   struct run *freelist;
-  uint freemem;
+  int freemem;
 } kmem;
 
 struct mmap_area mmap_area[NMMAP];
@@ -288,7 +288,7 @@ munmap(uint64 addr)
 int
 freemem(void)
 {
-  uint64 freemem;
+  int freemem;
 
   acquire(&kmem.lock);
   freemem = kmem.freemem;
