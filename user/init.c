@@ -25,21 +25,13 @@ main(void)
 
   for(;;){
     printf("init: starting sh\n");
-
-    /* xv6 부팅 메세지 */
-    printf("Student ID: 2023311459\n");
-    printf("Name: YunJung Kim\n");
-    printf("========== Welcome to xv6 ==========\n");
-
     pid = fork();
     if(pid < 0){
       printf("init: fork failed\n");
       exit(1);
     }
-    if(pid == 0){ // 자식 프로세스인 경우
-      exec("sh", argv); // "sh" 실행파일 실행
-
-      // 아래 코드는 "sh" 실행 파일 실행에 실패한 경우에 실행됨
+    if(pid == 0){
+      exec("sh", argv);
       printf("init: exec sh failed\n");
       exit(1);
     }

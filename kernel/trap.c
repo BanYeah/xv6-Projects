@@ -3,7 +3,6 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
-#include "kalloc.h"
 #include "proc.h"
 #include "defs.h"
 
@@ -38,8 +37,6 @@ void
 usertrap(void)
 {
   int which_dev = 0;
-  uint64 scause = r_scause();
-  uint64 stval = r_stval();
 
   if((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
@@ -53,7 +50,7 @@ usertrap(void)
   // save user program counter.
   p->trapframe->epc = r_sepc();
   
-  if(scause == 8){
+  if(r_scause() == 8){
     // system call
 
     if(killed(p))
@@ -68,19 +65,11 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if(scause == 13 || scause == 15){
-    // pagefault
-
-    struct mmap_area *m = find_mmap_area(stval - MMAPBASE, 1);
-    if (m == 0 || (scause == 15 && !(m->prot & PROT_WRITE)))
-      setkilled(p);
-    else
-      mmappage(m->addr, m->length, m->prot, m->flags, m->f, m->offset, m->p);
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
-    printf("usertrap(): unexpected scause 0x%lx pid=%d\n", scause, p->pid);
-    printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), stval);
+    printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
+    printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
     setkilled(p);
   }
 
@@ -88,24 +77,8 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2) {
-    acquire(&p->lock);
-    p->runtime += 1000;
-    p->vruntime += 1000 * 1024 / weight[p->nice];
-    p->tickcount += 1000; // update time slice
-
-    int tick_over = 0;
-    if(p->tickcount >= BASETIMESLICE) {
-      p->tickcount = 0;
-      p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
-      p->eligible = eligible(p);
-      tick_over = 1;
-    }
-    release(&p->lock);
-
-    if (tick_over)
-      yield();
-  }
+  if(which_dev == 2)
+    yield();
 
   usertrapret();
 }
@@ -165,48 +138,21 @@ kerneltrap()
   uint64 sepc = r_sepc();
   uint64 sstatus = r_sstatus();
   uint64 scause = r_scause();
-  uint64 stval = r_stval();
-
-  struct proc *p = myproc();
-
+  
   if((sstatus & SSTATUS_SPP) == 0)
     panic("kerneltrap: not from supervisor mode");
   if(intr_get() != 0)
     panic("kerneltrap: interrupts enabled");
 
-  if(scause == 13 || scause == 15){
-    // pagefault
-
-    struct mmap_area *m = find_mmap_area(stval - MMAPBASE, 1);
-    if (m == 0 || (scause == 15 && !(m->prot & PROT_WRITE)))
-      setkilled(p);
-    else
-      mmappage(m->addr, m->length, m->prot, m->flags, m->f, m->offset, m->p);
-  } else if((which_dev = devintr()) == 0){
+  if((which_dev = devintr()) == 0){
     // interrupt or trap from an unknown source
     printf("scause=0x%lx sepc=0x%lx stval=0x%lx\n", scause, r_sepc(), r_stval());
     panic("kerneltrap");
   }
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2 && p != 0) {
-    acquire(&p->lock);
-    p->runtime += 1000;
-    p->vruntime += 1000 * 1024 / weight[p->nice];
-    p->tickcount += 1000; // update time slice
-
-    int tick_over = 0;
-    if(p->tickcount >= BASETIMESLICE) {
-      p->tickcount = 0;
-      p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
-      p->eligible = eligible(p);
-      tick_over = 1;
-    }
-    release(&p->lock);
-
-    if (tick_over)
-      yield();
-  }
+  if(which_dev == 2 && myproc() != 0)
+    yield();
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.
@@ -227,7 +173,7 @@ clockintr()
   // ask for the next timer interrupt. this also clears
   // the interrupt request. 1000000 is about a tenth
   // of a second.
-  w_stimecmp(r_time() + 100000); // 0 하나 제거
+  w_stimecmp(r_time() + 1000000);
 }
 
 // check if it's an external interrupt or software interrupt,

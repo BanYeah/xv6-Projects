@@ -349,6 +349,13 @@ sfence_vma()
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
 
+struct page {
+	struct page *next;
+	struct page *prev;
+	pagetable_t pagetable;
+	char *vaddr;
+};
+
 #endif // __ASSEMBLER__
 
 #define PGSIZE 4096 // bytes per page

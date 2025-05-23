@@ -123,7 +123,6 @@ allocproc(void)
 
 found:
   p->pid = allocpid();
-  p->nice = 20;  // default nice value is 20
   p->state = USED;
 
   // Allocate a trapframe page.
@@ -159,18 +158,11 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
-  clear_mmap_area(p);
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
-  p->nice = 0;
-  p->tickcount = 0;
-  p->runtime = 0;
-  p->vruntime = 0;
-  p->vdeadline = 0;
-  p->eligible = 0;
   p->parent = 0;
   p->name[0] = 0;
   p->chan = 0;
@@ -259,8 +251,6 @@ userinit(void)
 
   p->state = RUNNABLE;
 
-  p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
-  p->eligible = eligible(p);
   release(&p->lock);
 }
 
@@ -306,9 +296,6 @@ fork(void)
   }
   np->sz = p->sz;
 
-  // Copy mmap area from parent to child.
-  copy_mmap_area(p, np);
-
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -330,16 +317,8 @@ fork(void)
   np->parent = p;
   release(&wait_lock);
 
-  acquire(&p->lock);
   acquire(&np->lock);
   np->state = RUNNABLE;
-  np->nice = p->nice;
-  np->tickcount = 0;
-  np->vruntime = p->vruntime;
-  release(&p->lock);
-
-  np->vdeadline = np->vruntime + BASETIMESLICE * 1024 / weight[np->nice];
-  np->eligible = eligible(np);
   release(&np->lock);
 
   return pid;
@@ -465,7 +444,6 @@ void
 scheduler(void)
 {
   struct proc *p;
-  struct proc *sp; // selected process
   struct cpu *c = mycpu();
 
   c->proc = 0;
@@ -475,82 +453,25 @@ scheduler(void)
     // processes are waiting.
     intr_on();
 
-    // Update eligible
     int found = 0;
-    int weightsum = 0, min_vruntime = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
-      if(p->pid != 0) {
-        acquire(&p->lock);
-
-        if(p->state == RUNNABLE) {
-          weightsum += weight[p->nice];
-          if(!(found) || (found && p->vruntime < min_vruntime)) {
-            min_vruntime = p->vruntime;
-            found = 1;
-          }
-        }
-
-        release(&p->lock);
-      }
-    }
-
-    int left_term = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
-      if(p->pid != 0) {
-        acquire(&p->lock);
-
-        if(p->state == RUNNABLE)
-          left_term += (p->vruntime - min_vruntime) * weight[p->nice];
-
-        release(&p->lock);
-      }
-    }
-
-    for(p = proc; p < &proc[NPROC]; p++) {
-      if(p->pid != 0) {
-        acquire(&p->lock);
-
-        p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
-        if(p->state == RUNNABLE)
-          p->eligible = left_term >= ((p->vruntime - min_vruntime) * weightsum) ? 1 : 0;
-          
-        release(&p->lock);
-      }
-    }
-
-
-    // Select process
-    found = 0;
-    int sp_vdeadline = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if(p->state == RUNNABLE && p->eligible) {
-        if(!(found) || (found && p->vdeadline < sp_vdeadline)) {
-          sp = p;
-          sp_vdeadline = p->vdeadline;
-          found = 1;
-        }
+      if(p->state == RUNNABLE) {
+        // Switch to chosen process.  It is the process's job
+        // to release its lock and then reacquire it
+        // before jumping back to us.
+        p->state = RUNNING;
+        c->proc = p;
+        swtch(&c->context, &p->context);
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+        found = 1;
       }
       release(&p->lock);
     }
-
-    if(found) {
-      acquire(&sp->lock);
-      // Switch to chosen process.  It is the process's job
-      // to release its lock and then reacquire it
-      // before jumping back to us.
-      sp->state = RUNNING;
-      c->proc = sp;
-      swtch(&c->context, &sp->context);
-      // CPU(운영체제)의 Context에서 Process의 Context로 전환
-      // 다시 CPU(운영체제)의 Context로 전환될 때까지 대기
-
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
-      release(&sp->lock);
-    }
-    else {
+    if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
       intr_on();
       asm volatile("wfi");
@@ -582,7 +503,6 @@ sched(void)
 
   intena = mycpu()->intena;
   swtch(&p->context, &mycpu()->context);
-  // Process의 Context에서 CPU(운영체제)의 Context로 전환
   mycpu()->intena = intena;
 }
 
@@ -592,8 +512,8 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-  p->state = RUNNABLE; // CPU 양보
-  sched(); // Scheduler 호출
+  p->state = RUNNABLE;
+  sched();
   release(&p->lock);
 }
 
@@ -664,10 +584,6 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
-
-        p->tickcount = 0;
-        p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
-        p->eligible = eligible(p);
       }
       release(&p->lock);
     }
@@ -775,198 +691,4 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
-}
-
-// Define system call
-int
-getnice(int pid)
-{
-  // check existence
-  int nice;
-  struct proc *p;
-  for(p = proc; p < &proc[NPROC]; p++)
-    if(p->pid == pid) break;
-
-  if(p >= &proc[NPROC]) return -1; // no corresponding process
-  else {
-    acquire(&p->lock);
-    nice = p->nice;
-    release(&p->lock);
-
-    return nice;
-  }
-}
-
-int
-setnice(int pid, int value)
-{
-  // check valid value
-  if(value < 0 || value > 39)
-    return -1;
-
-  // check existence
-  struct proc *p;
-  for(p = proc; p < &proc[NPROC]; p++)
-    if(p->pid == pid) break;
-
-  if(p >= &proc[NPROC]) return -1; // no corresponding process
-  else {
-    acquire(&p->lock);
-    p->nice = value;
-    p->vdeadline = p->vruntime + BASETIMESLICE * 1024 / weight[p->nice];
-    p->eligible = eligible(p);
-    release(&p->lock);
-    return 0;
-  }
-}
-
-void
-pps(struct proc *p) // print process status
-{
-  acquire(&p->lock);
-  printf("%s\t%d\t", p->name, p->pid);
-  switch(p->state)
-  {
-  case 0:
-    printf("UNUSED  \t");
-    break;
-  case 1:
-    printf("USED    \t");
-    break;
-  case 2:
-    printf("SLEEPING\t");
-    break;
-  case 3:
-    printf("RUNNABLE\t");
-    break;
-  case 4:
-    printf("RUNNING \t");
-    break;
-  case 5:
-    printf("ZOMBIE  \t");
-    break;
-  }
-  printf("%d", p->nice);
-  printf("\t\t%d\t\t%d", (p->runtime / weight[p->nice]), p->runtime);
-  
-  if(p->state == RUNNABLE || p->state == RUNNING)
-    printf("\t\t%d\t\t%d\t\t%s\n", p->vruntime, p->vdeadline, p->eligible ? "true " : "false");
-  else
-    printf("\t\t%d\t\t%d\n", p->vruntime, p->vdeadline);
-
-  release(&p->lock);
-}
-
-void 
-ps(int pid)
-{
-  if(pid == 0) { // all process's information
-    acquire(&tickslock);
-    uint t = ticks * 1000;
-    release(&tickslock);
-    printf("name\tpid\tstate   \tpriority");
-    printf("\truntime/weight\truntime  \tvruntime\tvdeadline\tis_eligible\ttick %u\n", t);
-
-    struct proc *p;
-    for(p = proc; p < &proc[NPROC]; p++) {
-      if(p->pid != 0)
-        pps(p); // print process status
-    }
-  } 
-  else { // corresponding process's information
-    // check existence
-    struct proc *p;
-    for(p = proc; p < &proc[NPROC]; p++)
-      if(p->pid == pid) break;
-
-    if(p >= &proc[NPROC]) return; // no corresponding process
-
-    acquire(&tickslock);
-    uint t = ticks * 1000;
-    release(&tickslock);
-    printf("name\tpid\tstate   \tpriority");
-    printf("\truntime/weight\truntime  \tvruntime\tvdeadline\tis_eligible\ttick %u\n", t);
-    pps(p); // print process status
-  }
-
-  return;
-}
-
-int
-waitpid(int pid)
-{
-  struct proc *pp;
-  struct proc *p = myproc(); // parent
-
-  acquire(&wait_lock);
-
-  // check existence
-  for(pp = proc; pp < &proc[NPROC]; pp++)
-    if(pp->pid == pid) break;
-
-  if(pp >= &proc[NPROC] || pp->parent != p) { // no corresponding process || not parent-child correlation
-    release(&wait_lock);
-    return -1;
-  }
-
-  for(;;) {
-    // make sure the child isn't still in exit() or swtch().
-    acquire(&pp->lock);
-
-    if(pp->state == ZOMBIE) {
-      freeproc(pp);
-      release(&pp->lock);
-      release(&wait_lock);
-      return 0;
-    }
-    release(&pp->lock);
-
-    if(killed(p)) {
-      release(&wait_lock);
-      return -1;
-    }
-    
-    // Wait for a child to exit.
-    sleep(p, &wait_lock);  //DOC: wait-sleep
-  }
-}
-
-int 
-eligible(struct proc *p)
-{
-  int found = 0;
-  int weightsum = 0, min_vruntime = 0;
-
-  struct proc *pp;
-  for(pp = proc; pp < &proc[NPROC]; pp++) {
-    if(pp != p) // p must already be locked
-      acquire(&pp->lock);
-
-    if(pp->state == RUNNABLE || pp->state == RUNNING) {
-      weightsum += weight[pp->nice];
-
-      if(!(found) || (found && pp->vruntime < min_vruntime)) {
-        min_vruntime = pp->vruntime;
-        found = 1;
-      }
-    }
-
-    if(pp != p)
-      release(&pp->lock);
-  }
-
-  int left_term = 0;
-  int right_term = (p->vruntime - min_vruntime) * weightsum;
-  for(pp = proc; pp < &proc[NPROC]; pp++) {
-    if(pp != p) // p must already be locked
-      acquire(&pp->lock);
-
-    if(pp->state == RUNNABLE || pp->state == RUNNING)
-      left_term += (pp->vruntime - min_vruntime) * weight[pp->nice];
-
-    if(pp != p)
-      release(&pp->lock);
-  }
-
-  return left_term >= right_term ? 1 : 0;
 }

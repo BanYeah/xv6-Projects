@@ -22,14 +22,9 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
-int getnice(int pid);
-int setnice(int pid, int value);
-void ps(int pid);
-uint64 meminfo(void);
-int waitpid(int pid);
-uint64 mmap(uint64 addr, int length, int prot, int flags, int fd, int offset);
-int munmap(uint64 addr);
-int freemem();
+void swapread(const char*, int);
+void swapwrite(const char*, int);
+void swapstat(int*, int*);
 
 // ulib.c
 int stat(const char*, struct stat*);

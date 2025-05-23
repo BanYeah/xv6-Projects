@@ -8,7 +8,6 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
-struct mmap_area;
 
 // bio.c
 void            binit(void);
@@ -54,6 +53,8 @@ int             readi(struct inode*, int, uint64, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
+void            swapread(uint64 ptr, int blkno);
+void            swapwrite(uint64 ptr, int blkno);
 
 // ramdisk.c
 void            ramdiskinit(void);
@@ -64,14 +65,6 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
-uint64          meminfo(void);
-struct mmap_area* find_mmap_area(uint64 addr, int option);
-void            copy_mmap_area(struct proc *p, struct proc *np);
-void            clear_mmap_area(struct proc *p);
-void            mmappage(uint64 addr, int length, int prot, int flags, struct file *f, int offset, struct proc *p);
-uint64          mmap(uint64 addr, int length, int prot, int flags, int fd, int offset);
-int             munmap(uint64 addr);
-int             freemem();
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -115,11 +108,6 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
-int             getnice(int pid); // Define system call
-int             setnice(int pid, int value);
-void            ps(int pid);
-int             waitpid(int pid);
-int             eligible(struct proc *p);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
