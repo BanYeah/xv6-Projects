@@ -82,7 +82,7 @@ kvminithart()
 //   21..29 -- 9 bits of level-1 index.
 //   12..20 -- 9 bits of level-0 index.
 //    0..11 -- 12 bits of byte offset within the page.
-pte_t *
+pte_t*
 walk(pagetable_t pagetable, uint64 va, int alloc)
 {
   if(va >= MAXVA)
@@ -162,7 +162,11 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
       return -1;
     if(*pte & PTE_V)
       panic("mappages: remap");
+
     *pte = PA2PTE(pa) | perm | PTE_V;
+    if(*pte & PTE_U)
+      append_lru(pagetable, a);
+
     if(a == last)
       break;
     a += PGSIZE;
@@ -186,14 +190,22 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
+
     if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
-    if(PTE_FLAGS(*pte) == PTE_V)
-      panic("uvmunmap: not a leaf");
-    if(do_free){
-      uint64 pa = PTE2PA(*pte);
-      kfree((void*)pa);
-    }
+      // panic("uvmunmap: not mapped");
+      swap_space_bitmap_clear(*pte >> 10); // PPN을 인자로
+    else {
+      if(PTE_FLAGS(*pte) == PTE_V)
+        panic("uvmunmap: not a leaf");
+
+      if(do_free) {
+        if (*pte & PTE_U)
+          remove_lru(pagetable, a);
+
+        uint64 pa = PTE2PA(*pte);
+        kfree((void*)pa);
+      }
+    }    
     *pte = 0;
   }
 }
@@ -320,8 +332,11 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
+
     if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+      // panic("uvmcopy: page not present");
+      swapin(i); // va
+
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
@@ -350,6 +365,8 @@ uvmclear(pagetable_t pagetable, uint64 va)
   if(pte == 0)
     panic("uvmclear");
   *pte &= ~PTE_U;
+
+  remove_lru(pagetable, va);
 }
 
 // Copy from kernel to user.
