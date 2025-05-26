@@ -507,26 +507,30 @@ sys_pipe(void)
 uint64 
 sys_swapread(void)
 {
-  uint64 ptr;
+  uint64 va;
   int blkno;
 
-  argaddr(0, &ptr);
+  argaddr(0, &va);
   argint(1, &blkno);
 
-  swapread(ptr, blkno);
+  swapread(va, blkno);
   return 0;
 }
 
 uint64 
 sys_swapwrite(void)
 {
-  uint64 ptr;
+  pagetable_t pagetable;
+  uint64 pt, va;
   int blkno;
 
-  argaddr(0, &ptr);
-  argint(1, &blkno);
+  argaddr(0, &pt);
+  argaddr(1, &va);
+  argint(2, &blkno);
 
-  swapwrite(ptr, blkno);
+  pagetable = (pagetable_t)pt;
+
+  swapwrite(pagetable, va, blkno);
   return 0;
 }
 

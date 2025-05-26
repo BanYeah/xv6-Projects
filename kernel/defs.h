@@ -53,8 +53,8 @@ int             readi(struct inode*, int, uint64, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
-void            swapread(uint64 ptr, int blkno);
-void            swapwrite(uint64 ptr, int blkno);
+void            swapread(uint64 va, int blkno);
+void            swapwrite(pagetable_t pagetable, uint64 va, int blkno);
 
 // ramdisk.c
 void            ramdiskinit(void);

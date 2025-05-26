@@ -699,39 +699,39 @@ nameiparent(char *path, char *name)
 }
 
 void
-swapread(uint64 ptr, int blkno)
+swapread(uint64 va, int blkno)
 {
   struct buf *bp;
-  int i;
-  const int BLKS_PER_PG = PGSIZE/BSIZE;
+  const int BLKS_PER_PG = PGSIZE / BSIZE; // 4096 / 1024 = 4
 
   if (blkno < 0 || blkno >= SWAPMAX / BLKS_PER_PG)
     panic("swapread: blkno exceeded range");
 
-  for(i = 0; i < BLKS_PER_PG; i++){
+  int i;
+  for(i = 0; i < BLKS_PER_PG; i++) {
     nr_sectors_read++;
     bp = bread(0, SWAPBASE + BLKS_PER_PG * blkno + i);
-    if(either_copyout(1, ptr + i * BSIZE, bp->data, BSIZE) == -1)
+    if(either_copyout(1, va + i * BSIZE, bp->data, BSIZE) == -1)
       panic("swapread: either_copyout failed");
     brelse(bp);
   }
 }
 
 void
-swapwrite(uint64 ptr, int blkno)
+swapwrite(pagetable_t pagetable, uint64 va, int blkno)
 {
   struct buf *bp;
-  int i;
-  const int BLKS_PER_PG = PGSIZE / BSIZE;
+  const int BLKS_PER_PG = PGSIZE / BSIZE; // 4
 
   if (blkno < 0 || blkno >= SWAPMAX / BLKS_PER_PG)
     panic("swapwrite: blkno exceeded range");
 
-  for(i = 0; i < BLKS_PER_PG; i++){
+  int i;
+  for(i = 0; i < BLKS_PER_PG; i++) {
     nr_sectors_write++;
     bp = bread(0, SWAPBASE + BLKS_PER_PG * blkno + i);
-    if(either_copyin(bp->data, 1, ptr + i * BSIZE, BSIZE) == -1)
-      panic("swapwrite: either_copyin failed");
+    if (copyin(pagetable, (void*)bp->data, va + i * BSIZE, BSIZE) == -1)
+      panic("swapwrite: copyin failed");
     bwrite(bp);
     brelse(bp);
   }
