@@ -42,7 +42,7 @@ kinit()
 
   swap_space_bitmap = kalloc();
   memset((char*)swap_space_bitmap, 0, PGSIZE); // 0으로 초기화
-  num_free_pages = PGSIZE;
+  num_free_pages = 7000; // swapread and swapwrite in fs.c
   num_lru_pages = 0;
 }
 
@@ -53,6 +53,8 @@ freepages()
   for (i = 0; i < PHYSTOP / PGSIZE; i++) {
     pages[i].next = 0; // unused
     pages[i].prev = 0;
+    pages[i].pagetable = 0;
+    pages[i].vaddr = 0;
   }
 }
 
@@ -141,20 +143,23 @@ swapout(void)
   r = (struct run *)walkaddr(vctm->pagetable, (uint64)vctm->vaddr);
 
   // swap to swap space
-  int i; // offset
-  for (i = 0; i < PGSIZE && swap_space_bitmap[i] != 0; i++);
-  if (i == PGSIZE)
-    panic("swapout: no space left");
+  int offset, i, b;
+  for (offset = 0; offset < PGSIZE*8; offset++) {
+    i = offset / 8, b = offset % 8;
+    if ((swap_space_bitmap[i] & (1 << b)) == 0) {
+      swap_space_bitmap[i] |= (1 << b); // set bit 1
+      num_free_pages--;
+      break;
+    }
+  }
   
-  swap_space_bitmap[i] = 1;
-  num_free_pages--;
   release(&page_lock);
 
-  swapwrite(vctm->pagetable, (uint64)vctm->vaddr, i); // lock 없이 수행해야
+  swapwrite(vctm->pagetable, (uint64)vctm->vaddr, offset); // lock 없이 수행해야
 
-  *pte = (i << 10) | PTE_FLAGS(*pte); // set PPN to offset // race condition 발생 가능성 존재
-  *pte &= ~PTE_V;                     // clear a PTE_V bit
-  sfence_vma();                       // TLB flush
+  *pte = (offset << 10) | PTE_FLAGS(*pte); // set PPN to offset // race condition 발생 가능성 존재
+  *pte &= ~PTE_V;                          // clear a PTE_V bit
+  sfence_vma();                            // TLB flush
 
   remove_lru(vctm->pagetable, (uint64)vctm->vaddr);
   acquire(&page_lock);
@@ -171,24 +176,27 @@ swapin(uint64 va)
 
   struct proc *p = myproc();
   pte_t *pte = walk(p->pagetable, va, 0);
-  int i = *pte >> 10; // offset
+  int offset = *pte >> 10;
 
-  *pte = ((uint64)pa << 10) | PTE_FLAGS(*pte); // set PPN to physical address
+  *pte = PA2PTE((uint64)pa) | PTE_FLAGS(*pte); // set PPN to physical address
   *pte |= PTE_V;                               // set a PTE_V bit
   sfence_vma();                                // TLB flush
 
-  swapread(va, i);
-  swap_space_bitmap_clear(i);
+  swapread(va, offset);
+  swap_space_bitmap_clear(offset);
 
   if (*pte & PTE_U)
     append_lru(p->pagetable, va);
 }
 
 void
-swap_space_bitmap_clear(int i)
+swap_space_bitmap_clear(int offset)
 {
+  int i, b;
+  i = offset / 8, b = offset % 8;
+
   acquire(&page_lock);
-  swap_space_bitmap[i] = 0;
+  swap_space_bitmap[i] &= ~(1 << b); // bit clear
   num_free_pages++;
   release(&page_lock);
 }
@@ -198,7 +206,7 @@ append_lru(pagetable_t pagetable, uint64 va)
 {
   acquire(&page_lock);
   int i;
-  for (i = 0; i < PHYSTOP/PGSIZE && pages[i].next != 0; i++);
+  for (i = 0; i < PHYSTOP/PGSIZE && pages[i].next != 0 && pages[i].prev != 0; i++);
   pages[i].pagetable = pagetable;
   pages[i].vaddr = (char*)va;
 
@@ -228,15 +236,17 @@ remove_lru(pagetable_t pagetable, uint64 va)
   struct page *temp = page_lru_head;
   do{
     if(temp->pagetable == pagetable && temp->vaddr == (char*)va) {
-      if(num_lru_pages == 1)
-        temp->next = 0; // free(temp)
-      else {
+      if(num_lru_pages > 1) {
         temp->next->prev = temp->prev;
         temp->prev->next = temp->next;
         if (temp == page_lru_head) // remove head
           page_lru_head = temp->next;
-        temp->next = 0; // free(temp)
       }
+      temp->next = 0; // unused
+      temp->prev = 0;
+      temp->pagetable = 0;
+      temp->vaddr = 0;
+
       num_lru_pages--;
       break;
     }

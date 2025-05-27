@@ -193,7 +193,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 
     if((*pte & PTE_V) == 0)
       // panic("uvmunmap: not mapped");
-      swap_space_bitmap_clear(*pte >> 10); // PPN을 인자로
+      swap_space_bitmap_clear(*pte >> 10); // PPN이 offset
     else {
       if(PTE_FLAGS(*pte) == PTE_V)
         panic("uvmunmap: not a leaf");
