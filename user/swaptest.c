@@ -2,8 +2,21 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 
-int main () {
-	int a = -1, b = -1;
-    swapstat(&a, &b);
-    printf("a: %d, b: %d\n", a, b);
+#define PGSIZE 4096
+
+void print_swapstat()
+{
+    int nr_read, nr_write;
+    swapstat(&nr_read, &nr_write);
+    printf("swapstat: NRR: %d, NRW: %d\n", nr_read, nr_write);
+}
+
+int main()
+{
+    printf("=== TEST START ===\n");
+
+    sbrk(PGSIZE * 30000);
+    print_swapstat(); // swapstat: NRR: 0, NRW: 7504
+
+    exit(0);
 }
