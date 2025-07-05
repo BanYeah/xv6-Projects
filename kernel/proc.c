@@ -124,11 +124,11 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  release(&p->lock); // kalloc()을 위해 lock 해제
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
-    release(&p->lock);
     return 0;
   }
 
@@ -136,7 +136,6 @@ found:
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
     freeproc(p);
-    release(&p->lock);
     return 0;
   }
 
@@ -240,6 +239,8 @@ userinit(void)
   // allocate one user page and copy initcode's instructions
   // and data into it.
   uvmfirst(p->pagetable, initcode, sizeof(initcode));
+
+  acquire(&p->lock);
   p->sz = PGSIZE;
 
   // prepare for the very first "return" from kernel to user.
@@ -291,9 +292,10 @@ fork(void)
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
-    release(&np->lock);
     return -1;
   }
+  
+  acquire(&np->lock);
   np->sz = p->sz;
 
   // copy saved user registers.
@@ -311,7 +313,6 @@ fork(void)
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
-
   release(&np->lock);
 
   acquire(&wait_lock);

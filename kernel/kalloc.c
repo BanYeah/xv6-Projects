@@ -7,8 +7,10 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "riscv.h"
+#include "proc.h"
 #include "defs.h"
 
+void freepages();
 void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
@@ -23,11 +25,37 @@ struct {
   struct run *freelist;
 } kmem;
 
+struct spinlock page_lock;
+struct page pages[PHYSTOP/PGSIZE];  // virtual pages
+struct page *page_lru_head;         // mapped virtual page
+char *swap_space_bitmap;
+int num_free_pages; // of swap space
+int num_lru_pages;
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&page_lock, "page");
+  freepages();
   freerange(end, (void*)PHYSTOP);
+
+  swap_space_bitmap = kalloc();
+  memset((char*)swap_space_bitmap, 0, PGSIZE); // 0으로 초기화
+  num_free_pages = 7000; // swapread and swapwrite in fs.c
+  num_lru_pages = 0;
+}
+
+void
+freepages()
+{
+  int i;
+  for (i = 0; i < PHYSTOP / PGSIZE; i++) {
+    pages[i].next = 0; // unused
+    pages[i].prev = 0;
+    pages[i].pagetable = 0;
+    pages[i].vaddr = 0;
+  }
 }
 
 void
@@ -65,7 +93,7 @@ kfree(void *pa)
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
-void *
+void*
 kalloc(void)
 {
   struct run *r;
@@ -75,8 +103,155 @@ kalloc(void)
   if(r)
     kmem.freelist = r->next;
   release(&kmem.lock);
+  
+  if(!r) {
+    acquire(&page_lock);
+    if(num_lru_pages > 0 && num_free_pages > 0)
+      r = swapout();
+    else
+      printf("out of memory\n"); // OOM
+    release(&page_lock);
+  }
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+
+// Requires the ```page_lock``` to be held before calling this function.
+// Returns a pointer that the kernel can use.
+void*
+swapout(void)
+{
+  pte_t *pte;
+  struct run *r;      // physical address
+  struct page *vctm;  // victim page
+  
+  // clock algorithm (select victim)
+  for(;;){
+    vctm = page_lru_head;
+
+    pte = walk(vctm->pagetable, (uint64)vctm->vaddr, 0); // 읽기 접근
+    if((*pte & PTE_A) == 0) break;
+
+    *pte &= ~PTE_A; // clear a PTE_A bit
+    sfence_vma();   // TLB flush
+
+    page_lru_head = page_lru_head->next;
+  }
+
+  r = (struct run *)walkaddr(vctm->pagetable, (uint64)vctm->vaddr);
+
+  // swap to swap space
+  int offset, i, b;
+  for (offset = 0; offset < PGSIZE*8; offset++) {
+    i = offset / 8, b = offset % 8;
+    if ((swap_space_bitmap[i] & (1 << b)) == 0) {
+      swap_space_bitmap[i] |= (1 << b); // set bit 1
+      num_free_pages--;
+      break;
+    }
+  }
+  
+  release(&page_lock);
+
+  swapwrite(vctm->pagetable, (uint64)vctm->vaddr, offset); // lock 없이 수행해야
+
+  *pte = (offset << 10) | PTE_FLAGS(*pte); // set PPN to offset // race condition 발생 가능성 존재
+  *pte &= ~PTE_V;                          // clear a PTE_V bit
+  sfence_vma();                            // TLB flush
+
+  remove_lru(vctm->pagetable, (uint64)vctm->vaddr);
+  acquire(&page_lock);
+
+  return r;
+}
+
+// Handle a page fault.
+void
+swapin(uint64 va)
+{
+  char *pa = kalloc();
+  if(pa == 0) return; // OOM (예외 처리 X)
+
+  struct proc *p = myproc();
+  pte_t *pte = walk(p->pagetable, va, 0);
+  int offset = *pte >> 10;
+
+  *pte = PA2PTE((uint64)pa) | PTE_FLAGS(*pte); // set PPN to physical address
+  *pte |= PTE_V;                               // set a PTE_V bit
+  sfence_vma();                                // TLB flush
+
+  swapread(va, offset);
+  swap_space_bitmap_clear(offset);
+
+  if (*pte & PTE_U)
+    append_lru(p->pagetable, va);
+}
+
+void
+swap_space_bitmap_clear(int offset)
+{
+  int i, b;
+  i = offset / 8, b = offset % 8;
+
+  acquire(&page_lock);
+  swap_space_bitmap[i] &= ~(1 << b); // bit clear
+  num_free_pages++;
+  release(&page_lock);
+}
+
+void
+append_lru(pagetable_t pagetable, uint64 va)
+{
+  acquire(&page_lock);
+  int i;
+  for (i = 0; i < PHYSTOP/PGSIZE && pages[i].next != 0 && pages[i].prev != 0; i++);
+  pages[i].pagetable = pagetable;
+  pages[i].vaddr = (char*)va;
+
+  if(num_lru_pages > 0) {
+    pages[i].next = page_lru_head;
+    pages[i].prev = page_lru_head->prev;
+    page_lru_head->prev->next = &pages[i];
+    page_lru_head->prev = &pages[i];
+  } else {
+    pages[i].next = &pages[i];
+    pages[i].prev = &pages[i];
+    page_lru_head = &pages[i];
+  }
+  num_lru_pages++;
+  release(&page_lock);
+}
+
+void
+remove_lru(pagetable_t pagetable, uint64 va)
+{
+  acquire(&page_lock);
+  if (num_lru_pages == 0) {
+    release(&page_lock);
+    return;
+  }
+
+  struct page *temp = page_lru_head;
+  do{
+    if(temp->pagetable == pagetable && temp->vaddr == (char*)va) {
+      if(num_lru_pages > 1) {
+        temp->next->prev = temp->prev;
+        temp->prev->next = temp->next;
+        if (temp == page_lru_head) // remove head
+          page_lru_head = temp->next;
+      }
+      temp->next = 0; // unused
+      temp->prev = 0;
+      temp->pagetable = 0;
+      temp->vaddr = 0;
+
+      num_lru_pages--;
+      break;
+    }
+
+    temp = temp->next;
+  } while(page_lru_head != temp);
+  release(&page_lock);
 }

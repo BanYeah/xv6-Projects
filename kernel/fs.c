@@ -24,6 +24,8 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 // there should be one superblock per disk device, but we run with
 // only one device
+int nr_sectors_read;
+int nr_sectors_write;
 struct superblock sb; 
 
 // Read the super block.
@@ -694,4 +696,43 @@ struct inode*
 nameiparent(char *path, char *name)
 {
   return namex(path, 1, name);
+}
+
+void
+swapread(uint64 va, int blkno)
+{
+  struct buf *bp;
+  const int BLKS_PER_PG = PGSIZE / BSIZE; // 4096 / 1024 = 4
+
+  if (blkno < 0 || blkno >= SWAPMAX / BLKS_PER_PG)
+    panic("swapread: blkno exceeded range");
+
+  int i;
+  for(i = 0; i < BLKS_PER_PG; i++) {
+    nr_sectors_read++;
+    bp = bread(0, SWAPBASE + BLKS_PER_PG * blkno + i);
+    if(either_copyout(1, va + i * BSIZE, bp->data, BSIZE) == -1)
+      panic("swapread: either_copyout failed");
+    brelse(bp);
+  }
+}
+
+void
+swapwrite(pagetable_t pagetable, uint64 va, int blkno)
+{
+  struct buf *bp;
+  const int BLKS_PER_PG = PGSIZE / BSIZE; // 4
+
+  if (blkno < 0 || blkno >= SWAPMAX / BLKS_PER_PG)
+    panic("swapwrite: blkno exceeded range");
+
+  int i;
+  for(i = 0; i < BLKS_PER_PG; i++) {
+    nr_sectors_write++;
+    bp = bread(0, SWAPBASE + BLKS_PER_PG * blkno + i);
+    if (copyin(pagetable, (void*)bp->data, va + i * BSIZE, BSIZE) == -1)
+      panic("swapwrite: copyin failed");
+    bwrite(bp);
+    brelse(bp);
+  }
 }

@@ -503,3 +503,50 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64 
+sys_swapread(void)
+{
+  uint64 va;
+  int blkno;
+
+  argaddr(0, &va);
+  argint(1, &blkno);
+
+  swapread(va, blkno);
+  return 0;
+}
+
+uint64 
+sys_swapwrite(void)
+{
+  pagetable_t pagetable;
+  uint64 pt, va;
+  int blkno;
+
+  argaddr(0, &pt);
+  argaddr(1, &va);
+  argint(2, &blkno);
+
+  pagetable = (pagetable_t)pt;
+
+  swapwrite(pagetable, va, blkno);
+  return 0;
+}
+
+uint64
+sys_swapstat(void)
+{
+  uint64 user_nr_read_ptr;
+  uint64 user_nr_write_ptr;
+  struct proc *p = myproc();
+
+  argaddr(0, &user_nr_read_ptr);
+  argaddr(1, &user_nr_write_ptr);
+
+  if (copyout(p->pagetable, user_nr_read_ptr, (char*)&nr_sectors_read, sizeof(int)) < 0 ||
+  copyout(p->pagetable, user_nr_write_ptr, (char *)&nr_sectors_write, sizeof(int)) < 0)
+    return -1;
+
+  return 0;
+}

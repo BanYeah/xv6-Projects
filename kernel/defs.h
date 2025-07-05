@@ -53,6 +53,8 @@ int             readi(struct inode*, int, uint64, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
+void            swapread(uint64 va, int blkno);
+void            swapwrite(pagetable_t pagetable, uint64 va, int blkno);
 
 // ramdisk.c
 void            ramdiskinit(void);
@@ -61,8 +63,13 @@ void            ramdiskrw(struct buf*);
 
 // kalloc.c
 void*           kalloc(void);
-void            kfree(void *);
+void            kfree(void*);
 void            kinit(void);
+void*           swapout(void);
+void            swapin(uint64 va);
+void            swap_space_bitmap_clear(int i);
+void            append_lru(pagetable_t pagetable, uint64 va);
+void            remove_lru(pagetable_t pagetable, uint64 va);
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -77,7 +84,7 @@ int             piperead(struct pipe*, uint64, int);
 int             pipewrite(struct pipe*, uint64, int);
 
 // printf.c
-int            printf(char*, ...) __attribute__ ((format (printf, 1, 2)));
+int             printf(char*, ...) __attribute__ ((format (printf, 1, 2)));
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 
